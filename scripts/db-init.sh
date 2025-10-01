@@ -135,8 +135,14 @@ TRUNCATE TABLE paper_movements;
 TRUNCATE TABLE clients;
 SET FOREIGN_KEY_CHECKS=1;
 
--- 2) Users → keep single placeholder; will be replaced below with dynamic login
+-- 2) Gold price/sample settings → очистить перед изменениями users (FK зависит от users)
+DELETE FROM gold_price_settings;
+DELETE FROM gold_sample_settings;
+
+-- 3) Users → оставить одну заглушку; будет заменён ниже динамическим логином
+SET FOREIGN_KEY_CHECKS=0;
 DELETE FROM users;
+SET FOREIGN_KEY_CHECKS=1;
 -- pick minimal valid foreign keys from lookup tables
 SET @region_id = (SELECT MIN(id) FROM region);
 SET @issue_auth_id = (SELECT MIN(id) FROM issue_authority);
@@ -156,13 +162,10 @@ INSERT INTO users (
   '$2y$10$4bV8S8j6V8TqVJmCq2gO6e5kqYcF2m1U0t3iGz7bV8ZqFJmCq2gO6', @post_id, NOW(), 0, NULL
 );
 
--- 3) Filials → keep only id=9 (central branch)
+-- 4) Filials → keep only id=9 (central branch)
 DELETE FROM filials WHERE id <> 9;
 
--- 4) Gold price/sample settings → keep single row
-DELETE FROM gold_price_settings;
-DELETE FROM gold_sample_settings;
-
+-- 5) Gold price/sample settings → создать по одной строке
 -- Use the inserted user id for ownership
 SET @u := (SELECT MIN(id) FROM users);
 INSERT INTO gold_price_settings (coeficient_table, user_id, date) VALUES (
