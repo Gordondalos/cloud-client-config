@@ -17,6 +17,13 @@
 
         npm run db:init
 
+
+
+
+
+
+
+
 Примечание по миграциям TypeORM и MySQL:
 - Для предотвращения ошибок вида "SAVEPOINT typeorm_1 does not exist" при выполнении DDL-миграций в MySQL, в шаблоне docker-compose для контейнера bd-proxy установлена переменная окружения:
 
