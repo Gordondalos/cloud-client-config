@@ -246,6 +246,8 @@ done
 
 echo "Запуск миграций внутри $APP_CONTAINER..."
 # Запускаем миграции без транзакций, чтобы избежать ошибок RELEASE SAVEPOINT при DDL в MySQL
-docker exec -i "$APP_CONTAINER" /bin/sh -c "export TYPEORM_MIGRATIONS_TRANSACTION_MODE=none; npm run migrate-run"
+# Передаём флаг CLI --transaction none и дублируем переменную окружения на случай конфигурации через env
+# Доп. замечание: аргументы после -- пробрасываются в npm-скрипт
+docker exec -i "$APP_CONTAINER" /bin/sh -c "export TYPEORM_MIGRATIONS_TRANSACTION_MODE=none; npm run migrate-run -- --transaction none"
 
 echo "Готово."
