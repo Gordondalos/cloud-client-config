@@ -1,0 +1,58 @@
+version: '3'
+services:
+
+  db-${BD_PROXY_ID}:
+    container_name: db-${BD_PROXY_ID}
+    image: 'mysql:8.0.35'
+    env_file:
+      - .env
+    environment:
+      - TZ=${TZ}
+    ports:
+      - '3307:3306'
+    volumes:
+      - 'fnt-db:/var/lib/mysql'
+      - './scripts:/docker-entrypoint-initdb.d'
+      - './mysql.cnf:/etc/mysql/conf.d/my.cnf'
+      - './mysql.cnf:/etc/mysql/mysql.cnf'
+      - '/etc/localtime:/etc/localtime:ro'
+      - '/etc/timezone:/etc/timezone:ro'
+    networks:
+      - mynetwork
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  bd-proxy-${BD_PROXY_ID}:
+    container_name: bd-proxy-${BD_PROXY_ID}
+    image: kreditpro.org:445/kreditpro/kreditpro-proxy-bd:${IMAGE_TAG}
+    env_file:
+      - .env
+    environment:
+      - TZ=${TZ}
+    networks:
+      - mynetwork
+    depends_on:
+      - db-${BD_PROXY_ID}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+volumes:
+  fnt-db:
+
+networks:
+  mynetwork:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.10.30.0/24

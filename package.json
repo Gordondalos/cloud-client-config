@@ -1,0 +1,23 @@
+{
+  "name": "cloud-client-config",
+  "version": "1.0.0",
+  "description": "Этот проект предназначен для быстрого разворачивания клиента в облачной инфраструктуре",
+  "homepage": "https://github.com/Gordondalos/cloud-client-config#readme",
+  "bugs": {
+    "url": "https://github.com/Gordondalos/cloud-client-config/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Gordondalos/cloud-client-config.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "update": "./update.sh",
+    "generate-docker-compose": "./generate-compose.sh",
+    "clean": "docker system prune -a -f",
+    "start": "npm run generate-docker-compose && docker compose up -d"
+  }
+}
