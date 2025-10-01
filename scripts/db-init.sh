@@ -67,23 +67,45 @@ cat <<EOF
 EOF
 
 # Ask for confirmation clearly as this will wipe data
-if [ "${YES:-}" != "1" ]; then
+# Support non-interactive approval via YES environment variable (1/true/yes/y)
+_yes_norm=$(printf '%s' "${YES:-}" | tr '[:upper:]' '[:lower:]')
+case "$_yes_norm" in
+  1|true|yes|y|да|д)
+    skip_prompt=1
+    ;;
+  *)
+    skip_prompt=0
+    ;;
+esac
+
+if [ "$skip_prompt" -ne 1 ]; then
   echo
   echo "ВНИМАНИЕ: выполнение скрипта ПОЛНОСТЬЮ УДАЛИТ данные в перечисленных базах и пересоздаст их." >&2
   printf "Вы действительно хотите продолжить? [yes/NO]: " >&2
+
+  answer=""
+  # Пытаемся прочитать из /dev/tty (интерактивный ввод)
   if [ -t 0 ] && [ -r /dev/tty ]; then
-    # Читать ответ напрямую с TTY, даже если stdin перенаправлен (npm, пайпы и т.п.)
-    read -r answer < /dev/tty || answer=""
-  else
-    read -r answer || answer=""
+    if ! read -r answer < /dev/tty; then
+      answer=""
+    fi
   fi
+  # Если не удалось прочитать из TTY, пробуем stdin (на случай npm/pipe)
+  if [ -z "$answer" ]; then
+    if ! read -r answer; then
+      answer=""
+    fi
+  fi
+
   # Нормализуем ввод: обрезаем пробелы и приводим к нижнему регистру
   answer=$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
   case "$answer" in
     yes|y|да|д)
       ;;
     *)
+      echo
       echo "Операция отменена пользователем." >&2
+      echo "Подсказка: можно запустить без подтверждения, установив переменную окружения YES=1 (или YES=yes)." >&2
       exit 0
       ;;
   esac
