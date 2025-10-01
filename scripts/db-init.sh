@@ -186,7 +186,9 @@ printf "%s" "$CLEANUP_SQL" | docker exec -i "$DB_CONTAINER" sh -lc 'cat > /tmp/c
 
 # Patch the only user's login to include BD_PROXY_ID
 LOGIN="gordondalos${BD_PROXY_ID}"
-docker exec -i "$DB_CONTAINER" sh -lc "mysql -uroot -p\"$MYSQL_ROOT_PASSWORD\" -e \"UPDATE fnt.users SET login='${LOGIN}' WHERE id=(SELECT MIN(id) FROM fnt.users);\""
+# Обойти MySQL ERROR 1093: нельзя использовать целевую таблицу в подзапросе — применяем JOIN с производной таблицей
+# UPDATE fnt.users u JOIN (SELECT id FROM (SELECT MIN(id) AS id FROM fnt.users) t) m ON m.id=u.id SET u.login=...
+docker exec -i "$DB_CONTAINER" sh -lc "mysql -uroot -p\"$MYSQL_ROOT_PASSWORD\" -e \"UPDATE fnt.users u JOIN (SELECT id FROM (SELECT MIN(id) AS id FROM fnt.users) t) m ON m.id = u.id SET u.login='${LOGIN}';\""
 
 echo "Инициализация баз данных завершена."
 
