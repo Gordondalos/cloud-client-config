@@ -72,8 +72,10 @@ if [ "${YES:-}" != "1" ]; then
   echo "ВНИМАНИЕ: выполнение скрипта ПОЛНОСТЬЮ УДАЛИТ данные в перечисленных базах и пересоздаст их." >&2
   printf "Вы действительно хотите продолжить? [yes/NO]: " >&2
   read -r answer || true
+  # Normalize input: trim spaces and lowercase
+  answer=$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
   case "$answer" in
-    yes|y|YES|Y)
+    yes|y|да|д)
       ;;
     *)
       echo "Операция отменена пользователем." >&2
