@@ -130,10 +130,7 @@ TRUNCATE TABLE paper_movements;
 TRUNCATE TABLE clients;
 SET FOREIGN_KEY_CHECKS=1;
 
--- 2) Filials → keep only id=9 (central branch)
-DELETE FROM filials WHERE id <> 9;
-
--- 3) Users → keep single placeholder; will be replaced below with dynamic login
+-- 2) Users → keep single placeholder; will be replaced below with dynamic login
 DELETE FROM users;
 -- pick minimal valid foreign keys from lookup tables
 SET @region_id = (SELECT MIN(id) FROM region);
@@ -153,6 +150,9 @@ INSERT INTO users (
   '2010-01-01', '00000000000000', @region_id, 'N/A', '+000000000', 9, '__LOGIN_TO_PATCH__',
   '$2y$10$4bV8S8j6V8TqVJmCq2gO6e5kqYcF2m1U0t3iGz7bV8ZqFJmCq2gO6', @post_id, NOW(), 0, NULL
 );
+
+-- 3) Filials → keep only id=9 (central branch)
+DELETE FROM filials WHERE id <> 9;
 
 -- 4) Gold price/sample settings → keep single row
 DELETE FROM gold_price_settings;
