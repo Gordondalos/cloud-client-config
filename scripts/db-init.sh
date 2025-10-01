@@ -134,6 +134,10 @@ fi
 if [ -f /docker-entrypoint-initdb.d/init_paper_print.sql ]; then
   mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt < /docker-entrypoint-initdb.d/init_paper_print.sql
 fi
+# Minimal business_day table required by migrations that add index on (date_open)
+if [ -f /docker-entrypoint-initdb.d/init_business_day.sql ]; then
+  mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt < /docker-entrypoint-initdb.d/init_business_day.sql
+fi
 # Create minimal bug_report table if it's absent in the dump (needed for newer migrations)
 if [ -f /docker-entrypoint-initdb.d/init_bug_report.sql ]; then
   mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt < /docker-entrypoint-initdb.d/init_bug_report.sql
