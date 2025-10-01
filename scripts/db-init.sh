@@ -83,16 +83,14 @@ if [ "${YES:-}" != "1" ]; then
 fi
 
 # Drop and (re)create databases explicitly before loading data
-DROP_CREATE_SQL=""
-for db in "${TARGET_DBS[@]}"; do
-  DROP_CREATE_SQL+="DROP DATABASE IF EXISTS \\\\`$db\\\\`;
-CREATE DATABASE IF NOT EXISTS \\\\`$db\\\\` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;\n"
-done
-
-docker exec -i "$DB_CONTAINER" sh -s <<SH
-set -e
-mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "${DROP_CREATE_SQL}"
-SH
+docker exec -i "$DB_CONTAINER" sh -c "mysql -uroot -p\"$MYSQL_ROOT_PASSWORD\"" <<'SQL'
+DROP DATABASE IF EXISTS `fnt`;
+CREATE DATABASE IF NOT EXISTS `fnt` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+DROP DATABASE IF EXISTS `fnt_log`;
+CREATE DATABASE IF NOT EXISTS `fnt_log` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+DROP DATABASE IF NOT EXISTS `license_db`;
+CREATE DATABASE IF NOT EXISTS `license_db` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+SQL
 
 # Run SQL scripts in a fixed order
 # 1) 01init.sql (users, grants, databases)
