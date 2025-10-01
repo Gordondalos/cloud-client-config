@@ -71,8 +71,13 @@ if [ "${YES:-}" != "1" ]; then
   echo
   echo "ВНИМАНИЕ: выполнение скрипта ПОЛНОСТЬЮ УДАЛИТ данные в перечисленных базах и пересоздаст их." >&2
   printf "Вы действительно хотите продолжить? [yes/NO]: " >&2
-  read -r answer || true
-  # Normalize input: trim spaces and lowercase
+  if [ -t 0 ] && [ -r /dev/tty ]; then
+    # Читать ответ напрямую с TTY, даже если stdin перенаправлен (npm, пайпы и т.п.)
+    read -r answer < /dev/tty || answer=""
+  else
+    read -r answer || answer=""
+  fi
+  # Нормализуем ввод: обрезаем пробелы и приводим к нижнему регистру
   answer=$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
   case "$answer" in
     yes|y|да|д)
