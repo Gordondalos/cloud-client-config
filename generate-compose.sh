@@ -14,14 +14,6 @@ if [[ -z "$BD_PROXY_ID" ]]; then
 fi
 
 
-# Подставляем переменные в promtail-config.yml
-if [[ -f traefik-config/promtail-config.yml ]]; then
-  envsubst < traefik-config/promtail-config.yml > traefik-config/promtail-config.rendered.yml
-  echo "✅ promtail-config.rendered.yml сгенерирован успешно"
-else
-  echo "[WARN] Файл traefik-config/promtail-config.yml не найден, пропускаем подстановку"
-fi
-
 echo "✅ docker-compose.yml сгенерирован успешно"
 
 # Генерация временного шаблона, где ключи тоже подставляются
