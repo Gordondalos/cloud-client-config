@@ -137,6 +137,10 @@ fi
 if [ -f /docker-entrypoint-initdb.d/init_fnt_log.sql ]; then
   mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt_log < /docker-entrypoint-initdb.d/init_fnt_log.sql
 fi
+# Apply compatibility patch to add missing `code` columns required by newer app migrations
+if [ -f /docker-entrypoint-initdb.d/patch_add_code_columns.sql ]; then
+  mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt < /docker-entrypoint-initdb.d/patch_add_code_columns.sql
+fi
 SH
 
 # Post-initialization data shaping for business requirements
