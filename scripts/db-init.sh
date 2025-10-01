@@ -103,10 +103,82 @@ mysql -uroot -p"$MYSQL_ROOT_PASSWORD" < /docker-entrypoint-initdb.d/01init.sql
 if [ -f /docker-entrypoint-initdb.d/2024-01-01T12:56:53.fnt.sql ]; then
   mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt < /docker-entrypoint-initdb.d/2024-01-01T12:56:53.fnt.sql
 fi
+# Ensure required auxiliary tables missing in the dump are created
+if [ -f /docker-entrypoint-initdb.d/init_paper_print.sql ]; then
+  mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt < /docker-entrypoint-initdb.d/init_paper_print.sql
+fi
 if [ -f /docker-entrypoint-initdb.d/init_fnt_log.sql ]; then
   mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt_log < /docker-entrypoint-initdb.d/init_fnt_log.sql
 fi
 SH
+
+# Post-initialization data shaping for business requirements
+# - Keep only one app user with login gordondalos${BD_PROXY_ID}
+# - Empty cashbox_actions, tickets, clients, paper_movements
+# - Keep only filial id=9
+# - Keep only one row in gold_price_settings and gold_sample_settings
+
+CLEANUP_SQL=$(cat <<'EOSQL'
+-- Ensure required minimal references exist
+USE fnt;
+
+-- 1) Tickets, cashbox actions, paper movements, clients → empty
+SET FOREIGN_KEY_CHECKS=0;
+TRUNCATE TABLE cashbox_actions;
+TRUNCATE TABLE tickets;
+TRUNCATE TABLE paper_movements;
+TRUNCATE TABLE clients;
+SET FOREIGN_KEY_CHECKS=1;
+
+-- 2) Filials → keep only id=9 (central branch)
+DELETE FROM filials WHERE id <> 9;
+
+-- 3) Users → keep single placeholder; will be replaced below with dynamic login
+DELETE FROM users;
+-- pick minimal valid foreign keys from lookup tables
+SET @region_id = (SELECT MIN(id) FROM region);
+SET @issue_auth_id = (SELECT MIN(id) FROM issue_authority);
+SET @post_id = (SELECT MIN(id) FROM posts);
+-- fallback to 1 if nulls (in case dumps change)
+SET @region_id = IFNULL(@region_id,1);
+SET @issue_auth_id = IFNULL(@issue_auth_id,1);
+SET @post_id = IFNULL(@post_id,1);
+
+INSERT INTO users (
+  name, surname, fathers_name, sex, birthdate, passport, document_issue_authority_id,
+  document_issue_date, inn, address_region_id, address, phone, filial_id, login,
+  password, post_id, creation_date, document_issue_authority_number, tableSettings
+) VALUES (
+  'Gordon', 'Dalos', 'N/A', 1, '1990-01-01 00:00:00', 'ID0000000', @issue_auth_id,
+  '2010-01-01', '00000000000000', @region_id, 'N/A', '+000000000', 9, '__LOGIN_TO_PATCH__',
+  '$2y$10$4bV8S8j6V8TqVJmCq2gO6e5kqYcF2m1U0t3iGz7bV8ZqFJmCq2gO6', @post_id, NOW(), 0, NULL
+);
+
+-- 4) Gold price/sample settings → keep single row
+DELETE FROM gold_price_settings;
+DELETE FROM gold_sample_settings;
+
+-- Use the inserted user id for ownership
+SET @u := (SELECT MIN(id) FROM users);
+INSERT INTO gold_price_settings (coeficient_table, user_id, date) VALUES (
+  JSON_ARRAY(JSON_OBJECT('coef', 1.0, 'name', 'base')),
+  @u,
+  NOW()
+);
+INSERT INTO gold_sample_settings (sample_table, user_id, date) VALUES (
+  JSON_ARRAY(JSON_OBJECT('price', '2000', 'probe', '999')),
+  @u,
+  NOW()
+);
+EOSQL
+)
+
+# Apply the cleanup SQL
+printf "%s" "$CLEANUP_SQL" | docker exec -i "$DB_CONTAINER" sh -lc 'cat > /tmp/cleanup.sql && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt < /tmp/cleanup.sql && rm -f /tmp/cleanup.sql'
+
+# Patch the only user's login to include BD_PROXY_ID
+LOGIN="gordondalos${BD_PROXY_ID}"
+docker exec -i "$DB_CONTAINER" sh -lc "mysql -uroot -p\"$MYSQL_ROOT_PASSWORD\" -e \"UPDATE fnt.users SET login='${LOGIN}' WHERE id=(SELECT MIN(id) FROM fnt.users);\""
 
 echo "Инициализация баз данных завершена."
 
