@@ -134,6 +134,10 @@ fi
 if [ -f /docker-entrypoint-initdb.d/init_paper_print.sql ]; then
   mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt < /docker-entrypoint-initdb.d/init_paper_print.sql
 fi
+# Create minimal bug_report table if it's absent in the dump (needed for newer migrations)
+if [ -f /docker-entrypoint-initdb.d/init_bug_report.sql ]; then
+  mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt < /docker-entrypoint-initdb.d/init_bug_report.sql
+fi
 if [ -f /docker-entrypoint-initdb.d/init_fnt_log.sql ]; then
   mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt_log < /docker-entrypoint-initdb.d/init_fnt_log.sql
 fi
