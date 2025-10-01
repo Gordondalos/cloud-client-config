@@ -19,6 +19,7 @@
     "generate-docker-compose": "./generate-compose.sh",
     "clean": "docker system prune -a -f",
     "stop": "docker-compose down",
-    "start": "npm run generate-docker-compose && docker compose up -d"
+    "start": "npm run generate-docker-compose && docker compose up -d",
+    "db:init": "bash ./scripts/db-init.sh"
   }
 }

@@ -1,72 +1,73 @@
-Cloud Client Config – Development Guidelines
+Cloud Client Config – Руководство по разработке
+Всегда отвечай на русском
 
-Scope
-These notes capture project-specific details to help advanced contributors work efficiently. They focus on: build/configuration, testing, and development practices particular to this repository.
+Область применения
+Эти заметки фиксируют специфичные для проекта детали, помогающие опытным контрибьюторам работать эффективно. Они сфокусированы на сборке/конфигурации, тестировании и практиках разработки, характерных именно для этого репозитория.
 
-Overview of this repo
-- Purpose: Quickly provision and run a client stack in an infrastructure environment using Docker Compose.
-- Entrypoints:
-  - generate-compose.sh – renders docker-compose.yml from docker-compose.template.yml and .env.
-  - update.sh – end-to-end update flow: pulls repo, pulls images, generates compose, brings services up, waits for bd-proxy-$BD_PROXY_ID to become healthy, then triggers migrations in the container.
-- Package.json convenience scripts:
+Обзор репозитория
+- Назначение: Быстро развернуть и запустить клиентский стек в инфраструктурной среде с использованием Docker Compose.
+- Точки входа:
+  - generate-compose.sh – генерирует docker-compose.yml из docker-compose.template.yml и .env.
+  - update.sh – сквозной сценарий обновления: тянет изменения репозитория, подтягивает образы, генерирует compose, поднимает сервисы, ждёт, пока bd-proxy-$BD_PROXY_ID станет здоровым, затем запускает миграции внутри контейнера.
+- Удобные скрипты из package.json:
   - npm run generate-docker-compose → ./generate-compose.sh
   - npm run start → npm run generate-docker-compose && docker compose up -d
   - npm run update → ./update.sh
 
-Build/Configuration Instructions
-Prerequisites (local or target server):
-- Docker Engine 24+ and Docker Compose v2 (docker compose …)
+Инструкции по сборке/конфигурации
+Предварительные требования (локально или на целевом сервере):
+- Docker Engine 24+ и Docker Compose v2 (docker compose …)
 - bash, coreutils, grep, sed
-- envsubst (from GNU gettext) – used by generate-compose.sh
-- git and npm (npm only for running the provided scripts; Node runtime is not otherwise used here)
+- envsubst (из GNU gettext) – используется в generate-compose.sh
+- git и npm (npm нужен только для запуска предоставленных скриптов; Node как рантайм иначе не используется)
 
-Required environment (.env):
-At minimum the following are required for successful compose generation and boot:
-- BD_PROXY_ID – integer identifier of the client instance. Used to name services/containers (db-$BD_PROXY_ID, bd-proxy-$BD_PROXY_ID).
-- IMAGE_TAG – tag to pull for kreditpro-proxy-bd image (e.g., latest or a release tag).
-- TZ – time zone string (e.g., Europe/Moscow) propagated into containers.
-Additional variables may be used by downstream services or in your environment (see readme.md examples):
-- MYSQL_HOST, API_PROXY_BD_SERVER_PORT – referenced in documentation/infra but not enforced by scripts.
+Обязательная среда (.env):
+Минимально необходимы следующие переменные для успешной генерации compose и запуска:
+- BD_PROXY_ID – целочисленный идентификатор клиентского инстанса. Используется для именования сервисов/контейнеров (db-$BD_PROXY_ID, bd-proxy-$BD_PROXY_ID).
+- IMAGE_TAG – тег образа для kreditpro-proxy-bd (например, latest или релизный тег).
+- TZ – строка часового пояса (например, Europe/Moscow), прокидывается внутрь контейнеров.
+Дополнительные переменные могут использоваться нижележащими сервисами или в вашей среде (см. примеры в readme.md):
+- MYSQL_HOST, API_PROXY_BD_SERVER_PORT – упоминаются в документации/инфраструктуре, но не проверяются скриптами.
 
-How compose rendering works:
-- generate-compose.sh will:
-  1) source .env (fail if BD_PROXY_ID is missing),
-  2) pre-replace occurrences of db-${BD_PROXY_ID} and bd-proxy-${BD_PROXY_ID} in service keys and container_name (sed) so that the literal keys get the numeric ID (envsubst does not substitute inside compose keys reliably),
-  3) run envsubst over the result to substitute remaining ${VAR}s,
-  4) write docker-compose.yml.
-- Optional promtail support: if traefik-config/promtail-config.yml exists, it will be rendered to traefik-config/promtail-config.rendered.yml via envsubst. The repository does not include this file by default; the step is skipped when absent.
+Как работает рендеринг compose:
+- generate-compose.sh выполняет:
+  1) загрузку .env (завершается ошибкой, если BD_PROXY_ID не задан),
+  2) предварительную замену в ключах сервисов и в container_name вхождений db-${BD_PROXY_ID} и bd-proxy-${BD_PROXY_ID} (sed), чтобы буквальные ключи получили числовой ID (envsubst ненадежно подставляет переменные внутри ключей compose),
+  3) запуск envsubst над результатом для подстановки оставшихся ${VAR},
+  4) запись docker-compose.yml.
+- Необязательная поддержка promtail: если существует traefik-config/promtail-config.yml, он будет отрендерен в traefik-config/promtail-config.rendered.yml через envsubst. В репозитории этот файл по умолчанию отсутствует; шаг пропускается, если файла нет.
 
-update.sh flow details:
-- Writes logs to Update.log in repo root (stdout/stderr redirected).
-- git pull is attempted first (non-fatal on failure).
-- Loads .env and derives CONTAINER_NAME="bd-proxy-${BD_PROXY_ID}".
-- docker compose pull (best-effort) to pre-pull images.
-- npm run start: generates compose and brings services up detached.
-- Waits up to ~60 seconds (30 × 2s) for the bd-proxy container to reach running status.
-- Executes migrations inside the bd-proxy container with: docker exec -i "$CONTAINER_NAME" /bin/sh -c "npm run migrate-run".
-  - Assumes the image kreditpro-proxy-bd contains an npm script migrate-run. If your image changes, ensure this remains available or update the script accordingly.
+Подробности работы update.sh:
+- Пишет логи в Update.log в корне репозитория (stdout/stderr перенаправлены).
+- Сначала пытается выполнить git pull (ошибка не фатальна).
+- Загружает .env и вычисляет CONTAINER_NAME="bd-proxy-${BD_PROXY_ID}".
+- Выполняет docker compose pull (по возможности), чтобы заранее подтянуть образы.
+- npm run start: генерирует compose и поднимает сервисы в фоне (detached).
+- Ждёт до ~60 секунд (30 × 2 с), пока контейнер bd-proxy не перейдёт в состояние running.
+- Запускает миграции внутри контейнера bd-proxy командой: docker exec -i "$CONTAINER_NAME" /bin/sh -c "npm run migrate-run".
+  - Предполагается, что образ kreditpro-proxy-bd содержит npm-скрипт migrate-run. Если ваш образ изменится, убедитесь, что этот скрипт остаётся доступным, или обновите сценарий соответствующим образом.
 
-Networking/volumes specifics:
-- Compose defines a custom bridge network mynetwork with subnet 10.10.30.0/24.
-- MySQL service exposes 3307:3306 by default and mounts:
-  - Named volume fnt-db for persistent data
-  - ./mysql.cnf to MySQL config locations
-  - ./scripts to /docker-entrypoint-initdb.d (optional; add init scripts there if needed)
+Сеть/тома
+- В compose определена пользовательская мостовая сеть mynetwork с подсетью 10.10.30.0/24.
+- Сервис MySQL по умолчанию публикует 3307:3306 и монтирует:
+  - Именованный том fnt-db для постоянных данных
+  - ./mysql.cnf в расположения конфигурации MySQL
+  - ./scripts в /docker-entrypoint-initdb.d (необязательно; при необходимости добавьте туда init-скрипты)
 
-Testing Information
-Test model (bash-based):
-- There is no dedicated test framework in this repo. For quick validation, prefer small bash scripts that run generate-compose.sh with a controlled .env and assert on the rendered docker-compose.yml.
-- Keep tests ephemeral (do not commit them) unless you establish a formal test layout. The CI/CD story is currently out of scope for this repo.
+Информация о тестировании
+Модель тестов (на bash):
+- В этом репозитории нет выделенного тестового фреймворка. Для быстрой проверки используйте небольшие bash-скрипты, которые запускают generate-compose.sh с контролируемым .env и проверяют сгенерированный docker-compose.yml.
+- Держите тесты эфемерными (не коммитьте их), если только вы не вводите формальную структуру тестов. CI/CD в рамках этого репозитория пока не рассматривается.
 
-How to run tests locally:
-1) Prepare a controlled .env and run the generator:
-   - Example values used for verification:
+Как запускать тесты локально:
+1) Подготовьте контролируемый .env и запустите генератор:
+   - Примерные значения для проверки:
      BD_PROXY_ID=12
      TZ=Europe/Moscow
      IMAGE_TAG=latest
-2) Run the generator and assert outputs. For convenience, here is an example sequence you can paste into your shell:
+2) Запустите генератор и проверьте результат. Для удобства вот последовательность, которую можно вставить в вашу оболочку:
    cp -a . ._backup >/dev/null 2>&1 || true
-   cat > .env <<'ENV' 
+   cat > .env <<'ENV'
    BD_PROXY_ID=12
    TZ=Europe/Moscow
    IMAGE_TAG=latest
@@ -81,37 +82,37 @@ How to run tests locally:
    rm -f docker-compose.yml .env
    rm -rf ._backup
 
-Guidelines for adding new tests:
-- Create a temporary bash script that:
-  - Writes a controlled .env with explicit BD_PROXY_ID, TZ, IMAGE_TAG.
-  - Invokes ./generate-compose.sh.
-  - Greps docker-compose.yml for the expected substitutions (service names and image tag).
-  - Restores any pre-existing docker-compose.yml and .env or removes the ones it created.
-- If you need to validate update.sh logic without Docker, you can dry-run portions by setting BD_PROXY_ID and mocking docker/grep with small wrappers on PATH in a temporary environment, but prefer not to commit such tooling.
+Рекомендации по добавлению новых тестов:
+- Создайте временный bash-скрипт, который:
+  - Записывает контролируемый .env с явными BD_PROXY_ID, TZ, IMAGE_TAG.
+  - Вызывает ./generate-compose.sh.
+  - Ищет в docker-compose.yml ожидаемые подстановки (имена сервисов и тег образа) через grep.
+  - Восстанавливает любые существовавшие ранее docker-compose.yml и .env или удаляет созданные им файлы.
+- Если вам необходимо «сухо» проверить логику update.sh без Docker, можно частично прогнать шаги, установив BD_PROXY_ID и подменив docker/grep небольшими обёртками на PATH во временной среде, но лучше не коммитить такую обвязку.
 
-Notes and gotchas:
-- envsubst must be present; if missing, generate-compose.sh will fail. On Debian/Ubuntu: apt-get install -y gettext-base.
-- BD_PROXY_ID is mandatory. The generator will exit early if it is not set in .env.
-- If you introduce new variables into docker-compose.template.yml, ensure they are documented and have sensible defaults or are validated in generate-compose.sh.
-- update.sh assumes Docker Compose v2 (docker compose). If only docker-compose v1 is available, either install v2 or adapt the script accordingly.
-- Migrations: The update script relies on an npm script inside the bd-proxy container. Validate that your image publishes the required script when updating images.
+Примечания и подводные камни:
+- envsubst должен быть установлен; при его отсутствии generate-compose.sh завершится с ошибкой. В Debian/Ubuntu: apt-get install -y gettext-base.
+- BD_PROXY_ID обязателен. Генератор завершится раньше, если он не указан в .env.
+- Если вы добавляете новые переменные в docker-compose.template.yml, задокументируйте их и задайте разумные значения по умолчанию или валидируйте в generate-compose.sh.
+- update.sh предполагает наличие Docker Compose v2 (docker compose). Если есть только docker-compose v1, установите v2 или адаптируйте сценарий.
+- Миграции: скрипт обновления полагается на npm-скрипт внутри контейнера bd-proxy. При обновлении образов убедитесь, что требуемый скрипт публикуется.
 
-Code style and conventions:
-- Shell scripts:
-  - Use set -e (and -u/-o pipefail where appropriate) to fail fast.
-  - Keep scripts idempotent where possible; avoid leaving temporary artifacts in the workspace.
-  - Prefer explicit checks and informative error messages (as already used in generate-compose.sh).
+Стиль и соглашения по коду:
+- Shell-скрипты:
+  - Используйте set -e (и -u/-o pipefail при необходимости), чтобы «падать» быстро.
+  - По возможности делайте сценарии идемпотентными; не оставляйте временных артефактов в рабочем каталоге.
+  - Предпочитайте явные проверки и информативные сообщения об ошибках (как уже сделано в generate-compose.sh).
 - Compose:
-  - Keep service names deterministic and derived from BD_PROXY_ID to avoid collisions across environments.
-  - Log rotation is already configured via json-file driver with size/file limits; preserve or extend as needed.
+  - Держите имена сервисов детерминированными и производными от BD_PROXY_ID, чтобы избегать коллизий между окружениями.
+  - Ротация логов уже настроена через драйвер json-file с ограничениями по размеру/количеству файлов; сохраняйте или расширяйте при необходимости.
 
-Validated example (manually executed while writing this document):
-- Using the sample .env (BD_PROXY_ID=12, TZ=Europe/Moscow, IMAGE_TAG=latest), ./generate-compose.sh produced docker-compose.yml with:
+Верифицированный пример (вручную воспроизведённый при написании документа):
+- Используя пример .env (BD_PROXY_ID=12, TZ=Europe/Moscow, IMAGE_TAG=latest), ./generate-compose.sh сгенерировал docker-compose.yml, содержащий:
   - container_name: db-12
   - container_name: bd-proxy-12
   - image: kreditpro.org:445/kreditpro/kreditpro-proxy-bd:latest
-- After verification, temporary files were removed to keep the repo clean.
+- После проверки временные файлы были удалены, чтобы сохранить чистоту репозитория.
 
-Housekeeping
-- Do not commit environment-specific artifacts (docker-compose.yml, .env, Update.log). Keep them local.
-- When adding new configuration templates, ensure they render via envsubst and provide clear warnings if optional files are missing (pattern used for promtail).
+Хозяйственные замечания
+- Не коммитьте артефакты, специфичные для окружения (docker-compose.yml, .env, Update.log). Держите их локально.
+- При добавлении новых шаблонов конфигурации убедитесь, что они рендерятся через envsubst, и предусмотрите понятные предупреждения, если отсутствуют необязательные файлы (шаблон, применённый для promtail).
