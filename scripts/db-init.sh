@@ -40,7 +40,7 @@ for i in {1..30}; do
 done
 
 # Determine which databases exist
-TARGET_DBS=("fnt" "fnt_log" "license_db")
+TARGET_DBS=("fnt" "fnt_log")
 EXISTING_DBS=()
 for db in "${TARGET_DBS[@]}"; do
   if docker exec "$DB_CONTAINER" sh -lc "mysql -N -uroot -p'$MYSQL_ROOT_PASSWORD' -e \"SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='$db'\" | grep -qx '$db'"; then
@@ -88,8 +88,6 @@ DROP DATABASE IF EXISTS `fnt`;
 CREATE DATABASE IF NOT EXISTS `fnt` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 DROP DATABASE IF EXISTS `fnt_log`;
 CREATE DATABASE IF NOT EXISTS `fnt_log` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-DROP DATABASE IF NOT EXISTS `license_db`;
-CREATE DATABASE IF NOT EXISTS `license_db` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 SQL
 
 # Run SQL scripts in a fixed order
