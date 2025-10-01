@@ -10,3 +10,5 @@
      MYSQL_HOST=db-12
      API_PROXY_BD_SERVER_PORT=3412
      BD_PROXY_ID=12
+
+3. Создаем папку на сервере и там разворачиваем этот репозиторий
