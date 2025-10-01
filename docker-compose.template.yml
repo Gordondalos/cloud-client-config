@@ -38,6 +38,8 @@ services:
       - .env
     environment:
       - TZ=${TZ}
+      # Отключаем транзакции миграций TypeORM, чтобы избежать ошибок RELEASE SAVEPOINT при DDL
+      - TYPEORM_MIGRATIONS_TRANSACTION_MODE=none
     depends_on:
       - db-${BD_PROXY_ID}
     networks:

@@ -245,6 +245,7 @@ until docker ps --filter "name=$APP_CONTAINER" --filter "status=running" | grep 
 done
 
 echo "Запуск миграций внутри $APP_CONTAINER..."
-docker exec -i "$APP_CONTAINER" /bin/sh -c "npm run migrate-run"
+# Запускаем миграции без транзакций, чтобы избежать ошибок RELEASE SAVEPOINT при DDL в MySQL
+docker exec -i "$APP_CONTAINER" /bin/sh -c "export TYPEORM_MIGRATIONS_TRANSACTION_MODE=none; npm run migrate-run"
 
 echo "Готово."
