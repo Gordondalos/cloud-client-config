@@ -2,20 +2,22 @@ services:
 
   db-${BD_PROXY_ID}:
     container_name: db-${BD_PROXY_ID}
-    image: 'mysql:8.0.35'
+    image: mysql:8.0.35
+    restart: unless-stopped
     env_file:
       - .env
     environment:
       - TZ=${TZ}
+    # ВНЕШНИЙ ДОСТУП (нужен — оставь; не нужен — закомментируй весь блок ports)
     ports:
-      - '3307:3306'
+      - '${HOST_DB_PORT:-3312}:3306'
     volumes:
-      - 'fnt-db:/var/lib/mysql'
-      - './scripts:/docker-entrypoint-initdb.d'
-      - './mysql.cnf:/etc/mysql/conf.d/my.cnf'
-      - './mysql.cnf:/etc/mysql/mysql.cnf'
-      - '/etc/localtime:/etc/localtime:ro'
-      - '/etc/timezone:/etc/timezone:ro'
+      - fnt-db-${BD_PROXY_ID}:/var/lib/mysql
+      - ./scripts:/docker-entrypoint-initdb.d
+      - ./mysql.cnf:/etc/mysql/conf.d/my.cnf
+      - ./mysql.cnf:/etc/mysql/mysql.cnf
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     networks:
       - mynetwork
     healthcheck:
@@ -24,7 +26,7 @@ services:
       timeout: 5s
       retries: 5
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
         max-size: "100m"
         max-file: "3"
@@ -32,26 +34,24 @@ services:
   bd-proxy-${BD_PROXY_ID}:
     container_name: bd-proxy-${BD_PROXY_ID}
     image: kreditpro.org:445/kreditpro/kreditpro-proxy-bd:${IMAGE_TAG}
+    restart: unless-stopped
     env_file:
       - .env
     environment:
       - TZ=${TZ}
-    networks:
-      - mynetwork
     depends_on:
       - db-${BD_PROXY_ID}
+    networks:
+      - mynetwork
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
         max-size: "100m"
         max-file: "3"
 
 volumes:
-  fnt-db:
+  fnt-db-${BD_PROXY_ID}:
 
 networks:
   mynetwork:
     driver: bridge
-#    ipam:
-#      config:
-#        - subnet: 10.10.30.0/24
