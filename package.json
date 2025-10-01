@@ -18,6 +18,7 @@
     "update": "./update.sh",
     "generate-docker-compose": "./generate-compose.sh",
     "clean": "docker system prune -a -f",
+    "stop": "docker-compose down",
     "start": "npm run generate-docker-compose && docker compose up -d"
   }
 }
