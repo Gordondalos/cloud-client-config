@@ -55,4 +55,5 @@ volumes:
 
 networks:
   mynetwork:
-    driver: bridge
+    external: true
+    name: kreditpro_mynetwork
