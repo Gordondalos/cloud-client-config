@@ -10,7 +10,7 @@ services:
       - TZ=${TZ}
     # ВНЕШНИЙ ДОСТУП (нужен — оставь; не нужен — закомментируй весь блок ports)
     ports:
-      - '${HOST_DB_PORT:-3312}:3306'
+      - '${HOST_DB_PORT:-3306}:3306'
     volumes:
       - fnt-db-${BD_PROXY_ID}:/var/lib/mysql
       - ./scripts:/docker-entrypoint-initdb.d
