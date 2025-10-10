@@ -108,26 +108,28 @@ CREATE DATABASE IF NOT EXISTS `fnt_log` CHARACTER SET utf8mb4 COLLATE utf8mb4_ge
 SQL
 
 # =======================
-# Импорт SQL (по наличию)
+# Импорт SQL (по наличию) — ИЗ /opt/initdb
 # =======================
 docker exec -i "${DB_CONTAINER}" sh -s <<'SH'
 set -e
+INITDIR="/opt/initdb"
+
 # 01init.sql может создавать пользователей/гранты и т.п.
-[ -f /docker-entrypoint-initdb.d/01init.sql ] && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" < /docker-entrypoint-initdb.d/01init.sql || true
+[ -f "${INITDIR}/01init.sql" ] && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" < "${INITDIR}/01init.sql" || true
 
 # дамп схемы fnt (если есть)
-if [ -f /docker-entrypoint-initdb.d/2024-01-01T12:56:53.fnt.sql ]; then
-  mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt < /docker-entrypoint-initdb.d/2024-01-01T12:56:53.fnt.sql
+if [ -f "${INITDIR}/2024-01-01T12:56:53.fnt.sql" ]; then
+  mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt < "${INITDIR}/2024-01-01T12:56:53.fnt.sql"
 fi
 
 # доп. необходимые таблицы/патчи для fnt
-[ -f /docker-entrypoint-initdb.d/init_paper_print.sql ]       && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt     < /docker-entrypoint-initdb.d/init_paper_print.sql
-[ -f /docker-entrypoint-initdb.d/init_business_day.sql ]      && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt     < /docker-entrypoint-initdb.d/init_business_day.sql
-[ -f /docker-entrypoint-initdb.d/init_bug_report.sql ]        && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt     < /docker-entrypoint-initdb.d/init_bug_report.sql
-[ -f /docker-entrypoint-initdb.d/patch_add_code_columns.sql ] && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt     < /docker-entrypoint-initdb.d/patch_add_code_columns.sql
+[ -f "${INITDIR}/init_paper_print.sql" ]       && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt     < "${INITDIR}/init_paper_print.sql"
+[ -f "${INITDIR}/init_business_day.sql" ]      && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt     < "${INITDIR}/init_business_day.sql"
+[ -f "${INITDIR}/init_bug_report.sql" ]        && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt     < "${INITDIR}/init_bug_report.sql"
+[ -f "${INITDIR}/patch_add_code_columns.sql" ] && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt     < "${INITDIR}/patch_add_code_columns.sql"
 
 # схема fnt_log (если есть)
-[ -f /docker-entrypoint-initdb.d/init_fnt_log.sql ]           && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt_log < /docker-entrypoint-initdb.d/init_fnt_log.sql
+[ -f "${INITDIR}/init_fnt_log.sql" ]           && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt_log < "${INITDIR}/init_fnt_log.sql"
 SH
 
 echo "Инициализация БД завершена."
