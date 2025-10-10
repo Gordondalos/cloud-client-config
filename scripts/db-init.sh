@@ -47,11 +47,7 @@ ${COMPOSE} -f "${COMPOSE_FILE}" up -d "${DB_CONTAINER}"
 
 echo "Ожидание готовности ${DB_CONTAINER} (MySQL)…"
 
-# -----------------------
-# Фаза A: ждём, пока MySQL вообще поднимется (temporary server ок)
-#   1) health=healthy
-#   2) mysqladmin ping БЕЗ пароля (temporary server тоже ответит)
-# -----------------------
+# Фаза A: health + ping без пароля
 for _ in {1..180}; do
   st="$(docker inspect -f '{{.State.Health.Status}}' "${DB_CONTAINER}" 2>/dev/null || echo unknown)"
   [[ "${st}" == "healthy" ]] && break
@@ -65,11 +61,7 @@ for _ in {1..120}; do
   sleep 2
 done
 
-# -----------------------
-# Фаза B: ждём, пока ЗАРАБОТАЕТ ПАРОЛЬ (т.е. финальный сервер после init-скриптов)
-#   Критерий: "SELECT 1" с root+паролем успешно.
-#   Это может занять ещё 2-5 минут на больших дампах.
-# -----------------------
+# Фаза B: ждём SELECT под root с паролем
 PW_OK=0
 for _ in {1..240}; do
   if docker exec "${DB_CONTAINER}" sh -lc "mysql -N -uroot -p\"${MYSQL_ROOT_PASSWORD}\" -e 'SELECT 1' >/dev/null 2>&1"; then
@@ -98,67 +90,80 @@ cat <<EOF
 EOF
 
 # =======================
-# Дроп/создание БД
+# Дроп/создание БД (с явным логом ошибок)
 # =======================
-docker exec -i "${DB_CONTAINER}" sh -c "mysql -uroot -p\"${MYSQL_ROOT_PASSWORD}\"" <<'SQL'
+echo "[STEP] Создаю базы fnt / fnt_log…"
+if ! docker exec -i "${DB_CONTAINER}" sh -c "mysql -uroot -p\"${MYSQL_ROOT_PASSWORD}\"" <<'SQL'
 DROP DATABASE IF EXISTS `fnt`;
-CREATE DATABASE IF NOT EXISTS `fnt` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+CREATE DATABASE IF NOT EXISTS `fnt`     CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 DROP DATABASE IF EXISTS `fnt_log`;
 CREATE DATABASE IF NOT EXISTS `fnt_log` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 SQL
-
-# =======================
-# Импорт SQL (по наличию) — ИЗ /opt/initdb
-# =======================
-docker exec -i "${DB_CONTAINER}" sh -s <<'SH'
-set -e
-INITDIR="/opt/initdb"
-
-# 01init.sql может создавать пользователей/гранты и т.п.
-[ -f "${INITDIR}/01init.sql" ] && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" < "${INITDIR}/01init.sql" || true
-
-# дамп схемы fnt (если есть)
-if [ -f "${INITDIR}/2024-01-01T12:56:53.fnt.sql" ]; then
-  mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt < "${INITDIR}/2024-01-01T12:56:53.fnt.sql"
+then
+  echo "[ERROR] Не удалось создать базы. Диагностика:" >&2
+  docker exec "${DB_CONTAINER}" sh -lc 'mysqladmin -uroot -p"$MYSQL_ROOT_PASSWORD" status || true' >&2 || true
+  exit 1
 fi
 
+# =======================
+# Импорт SQL (сначала /opt/initdb, потом fallback)
+# =======================
+echo "[STEP] Импорт SQL…"
+docker exec -i "${DB_CONTAINER}" sh -s <<'SH'
+set -e
+# Основной каталог
+INITDIR="/opt/initdb"
+# Резервный (на старых сборках)
+FALLBACK="/docker-entrypoint-initdb.d"
+
+use_dir() {
+  [ -d "$1" ] && echo "$1" && return 0
+  return 1
+}
+
+DIR="$(use_dir "$INITDIR" || use_dir "$FALLBACK" || true)"
+if [ -z "$DIR" ]; then
+  echo "[INFO] Каталоги с SQL не найдены (/opt/initdb и /docker-entrypoint-initdb.d). Пропускаю импорт."
+  exit 0
+fi
+
+echo "[INFO] Использую каталог с SQL: $DIR"
+
+# 01init.sql может создавать пользователей/гранты и т.п.
+[ -f "$DIR/01init.sql" ] && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" < "$DIR/01init.sql" || true
+
+# дамп схемы fnt (если есть)
+[ -f "$DIR/2024-01-01T12:56:53.fnt.sql" ] && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt < "$DIR/2024-01-01T12:56:53.fnt.sql" || true
+
 # доп. необходимые таблицы/патчи для fnt
-[ -f "${INITDIR}/init_paper_print.sql" ]       && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt     < "${INITDIR}/init_paper_print.sql"
-[ -f "${INITDIR}/init_business_day.sql" ]      && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt     < "${INITDIR}/init_business_day.sql"
-[ -f "${INITDIR}/init_bug_report.sql" ]        && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt     < "${INITDIR}/init_bug_report.sql"
-[ -f "${INITDIR}/patch_add_code_columns.sql" ] && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt     < "${INITDIR}/patch_add_code_columns.sql"
+[ -f "$DIR/init_paper_print.sql" ]       && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt     < "$DIR/init_paper_print.sql" || true
+[ -f "$DIR/init_business_day.sql" ]      && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt     < "$DIR/init_business_day.sql" || true
+[ -f "$DIR/init_bug_report.sql" ]        && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt     < "$DIR/init_bug_report.sql" || true
+[ -f "$DIR/patch_add_code_columns.sql" ] && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt     < "$DIR/patch_add_code_columns.sql" || true
 
 # схема fnt_log (если есть)
-[ -f "${INITDIR}/init_fnt_log.sql" ]           && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt_log < "${INITDIR}/init_fnt_log.sql"
+[ -f "$DIR/init_fnt_log.sql" ]           && mysql -uroot -p"$MYSQL_ROOT_PASSWORD" fnt_log < "$DIR/init_fnt_log.sql" || true
 SH
 
 echo "Инициализация БД завершена."
 
-# =======================
-# (ОПЦИОНАЛЬНО) Очистка/подготовка данных
-# Если не нужна — удали блок ниже до «Патчим логин».
-# =======================
+# ====== (ОПЦ) Очистка/подготовка — как у тебя (можно удалить блок) ======
 CLEANUP_SQL=$(cat <<'EOSQL'
 USE fnt;
-
 SET FOREIGN_KEY_CHECKS=0;
 TRUNCATE TABLE cashbox_actions;
 TRUNCATE TABLE tickets;
 TRUNCATE TABLE paper_movements;
 TRUNCATE TABLE clients;
 SET FOREIGN_KEY_CHECKS=1;
-
 DELETE FROM gold_price_settings;
 DELETE FROM gold_sample_settings;
-
 SET FOREIGN_KEY_CHECKS=0;
 DELETE FROM users;
 SET FOREIGN_KEY_CHECKS=1;
-
 SET @region_id     = IFNULL((SELECT MIN(id) FROM region),1);
 SET @issue_auth_id = IFNULL((SELECT MIN(id) FROM issue_authority),1);
 SET @post_id       = IFNULL((SELECT MIN(id) FROM posts),1);
-
 INSERT INTO users (
   name, surname, fathers_name, sex, birthdate, passport, document_issue_authority_id,
   document_issue_date, inn, address_region_id, address, phone, filial_id, login,
@@ -168,19 +173,13 @@ INSERT INTO users (
   '2010-01-01', '00000000000000', @region_id, 'N/A', '+000000000', 9, '__LOGIN_TO_PATCH__',
   '$2y$10$4bV8S8j6V8TqVJmCq2gO6e5kqYcF2m1U0t3iGz7bV8ZqFJmCq2gO6', @post_id, NOW(), 0, NULL
 );
-
 DELETE FROM filials WHERE id <> 9;
-
 SET @u := (SELECT MIN(id) FROM users);
 INSERT INTO gold_price_settings (coeficient_table, user_id, date) VALUES (
-  JSON_ARRAY(JSON_OBJECT('coef', 1.0, 'name', 'base')),
-  @u,
-  NOW()
+  JSON_ARRAY(JSON_OBJECT('coef', 1.0, 'name', 'base')), @u, NOW()
 );
 INSERT INTO gold_sample_settings (sample_table, user_id, date) VALUES (
-  JSON_ARRAY(JSON_OBJECT('price', '2000', 'probe', '999')),
-  @u,
-  NOW()
+  JSON_ARRAY(JSON_OBJECT('price', '2000', 'probe', '999')), @u, NOW()
 );
 EOSQL
 )
@@ -210,7 +209,5 @@ for _ in {1..60}; do
   sleep 3
 done
 
-# Запуск миграций, если есть npm-скрипт
 docker exec -i "${APP_CONTAINER}" /bin/sh -c 'command -v npm >/dev/null 2>&1 && (export TYPEORM_MIGRATIONS_TRANSACTION_MODE=none; npm run migrate-run -- --transaction none) || true' || true
-
 echo "Готово."
