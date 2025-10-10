@@ -13,7 +13,7 @@ services:
       - '${HOST_DB_PORT:-3306}:3306'
     volumes:
       - fnt-db-${BD_PROXY_ID}:/var/lib/mysql
-        - ./scripts:/opt/initdb #- ./scripts:/docker-entrypoint-initdb.d
+      - ./scripts:/opt/initdb:ro  #- ./scripts:/docker-entrypoint-initdb.d
       - ./mysql.cnf:/etc/mysql/conf.d/my.cnf
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
